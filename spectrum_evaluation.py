@@ -16,6 +16,7 @@ import hyperspy as hs
 import copy
 import pandas as pd
 
+
 # Savitsky and Golay Poly Smoothing (pg 315 in Fortran)
 #
 # Input:  Y          Original Spectrum
@@ -25,24 +26,25 @@ import pandas as pd
 # Output: S          Smoothed spectrum, only defined between ICH1 & ICH2
 
 def SGSMITH(Y, NCHAN, ICH1, ICH2, IWID):
-    #calculate filter coefficients
+    # calculate filter coefficients
     #
     IW = np.min([IWID, 51])
-    C = np.zeros(IW)   #changed this to the width of the filter
-    M = np.int((IW-1)/2)   # needed to add a -1 term from Fortran
-    SUM = (2*M-1)*(2*M+1)*(2*M+3)  #no change
-    for j in np.arange(IW): #index from 0 to 2M instead of -M to M
-        C[j] = 3*(3*M**2 + 3*M-1-5*(j-M)**2)  #need to subtract M
-    #convolute spectrum with filter
+    C = np.zeros(IW)  # changed this to the width of the filter
+    M = np.int((IW - 1) / 2)  # needed to add a -1 term from Fortran
+    SUM = (2 * M - 1) * (2 * M + 1) * (2 * M + 3)  # no change
+    for j in np.arange(IW):  # index from 0 to 2M instead of -M to M
+        C[j] = 3 * (3 * M ** 2 + 3 * M - 1 - 5 * (j - M) ** 2)  # need to subtract M
+    # convolute spectrum with filter
     #
     JCH1 = np.max([ICH1, M])
-    JCH2 = np.min([ICH2, NCHAN-1-M])
-    S = np.zeros(NCHAN)   #initialize and empty filtered spectrum
-    for i in np.arange(JCH1, JCH2): #this is a subset of the full spectra
+    JCH2 = np.min([ICH2, NCHAN - 1 - M])
+    S = np.zeros(NCHAN)  # initialize and empty filtered spectrum
+    for i in np.arange(JCH1, JCH2):  # this is a subset of the full spectra
         for j in np.arange(IW):  # this is 0 to 2m
-            S[i] = S[i] + C[j]*Y[i+(j-M)]  # need to subtract M
-        S[i] = S[i]/SUM
+            S[i] = S[i] + C[j] * Y[i + (j - M)]  # need to subtract M
+        S[i] = S[i] / SUM
     return S
+
 
 # Peak stripping - SNIP algorithm (pg 319 in Fortran)
 #
@@ -56,36 +58,35 @@ def SGSMITH(Y, NCHAN, ICH1, ICH2, IWID):
 # comment:  uses subroutine SGSMITH
 
 
-
 def SNIPBG(Y, NCHAN, ICH1, ICH2, FWHM, NREDUC, NITER):
-    #Smooth spectrum
+    # Smooth spectrum
     IW = np.int(FWHM)
-    I1 = np.max([ICH1-IW, 0])
-    I2 = np.min([ICH2+IW, NCHAN-1])
+    I1 = np.max([ICH1 - IW, 0])
+    I2 = np.min([ICH2 + IW, NCHAN - 1])
     YBACK = SGSMITH(Y, NCHAN, I1, I2, IW)
     zeros = np.zeros(NCHAN)
     test = np.zeros(NCHAN)
-    #Square root transformation over region
+    # Square root transformation over region
     YBACK = np.sqrt(np.maximum(YBACK, zeros))
-    #for i in np.arange(I1,I2):
+    # for i in np.arange(I1,I2):
     #    YBACK[i] = np.sqrt(np.max([YBACK[i],0]))
-        #YBACK[i] = np.log(np.log(np.sqrt(np.max([YBACK[i],0]) +1)+1)+1)
-    #Peak stripping
+    # YBACK[i] = np.log(np.log(np.sqrt(np.max([YBACK[i],0]) +1)+1)+1)
+    # Peak stripping
     REDFAC = 1
     for n in np.arange(0, NITER):
-        if n+1 > NITER-NREDUC:
-            REDFAC = REDFAC/np.sqrt(2)
-        IW = np.max([np.int(REDFAC*FWHM), 1])
+        if n + 1 > NITER - NREDUC:
+            REDFAC = REDFAC / np.sqrt(2)
+        IW = np.max([np.int(REDFAC * FWHM), 1])
         for i in np.arange(ICH1, ICH2):
-            I1 = np.int(np.max([i-IW, 0]))
-            I2 = np.int(np.min([i+IW, NCHAN-1]))
-            test[i] = 0.5*(YBACK[I1]+YBACK[I2])
+            I1 = np.int(np.max([i - IW, 0]))
+            I2 = np.int(np.min([i + IW, NCHAN - 1]))
+            test[i] = 0.5 * (YBACK[I1] + YBACK[I2])
             YBACK[i] = np.minimum.reduce([YBACK[i], test[i]])
     YBACK = np.square(YBACK)
-    #for i in np.arange(I1,I2):
+    # for i in np.arange(I1,I2):
     #    YBACK[i] = np.square(YBACK[i])
-        #YBACK[i] = np.square(np.exp(np.exp(YBACK[i])-1)-1)-1
-        #YBACK[i] = np.square(np.max([YBACK[i],0]))
+    # YBACK[i] = np.square(np.exp(np.exp(YBACK[i])-1)-1)-1
+    # YBACK[i] = np.square(np.max([YBACK[i],0]))
     return YBACK
 
 
@@ -106,45 +107,43 @@ def TOPHAT(IN, NCHAN, IFIRST, ILAST, IWIDTH, MODE):
     # Mode = 0 (calculate filtered spctrum)
     # Mode != 0 (calculate weights)
     # Calculate filter constants
-    #print("mode: ", MODE)
+    # print("mode: ", MODE)
     OUT = np.zeros(NCHAN)
     IW = IWIDTH
     # makes sure IW is odd by adding 1 to any even IW
     if np.mod(IW, 2) == 0: IW = IW + 1
-    FPOS = 1./np.float(IW)
-    #print("FPOS: ", FPOS)
-    KPOS = np.int(IW/2 -0.5)
-    IV = 2*np.int(IW/2 - 0.5)
-    FNEG = -1./np.float(2*IV)
-    #print("FNEG: ", FNEG)
-    KNEG1 = np.int(IW/2 +1)
-    KNEG2 = np.int(IW/2 +IV)
+    FPOS = 1. / np.float(IW)
+    # print("FPOS: ", FPOS)
+    KPOS = np.int(IW / 2 - 0.5)
+    IV = 2 * np.int(IW / 2 - 0.5)
+    FNEG = -1. / np.float(2 * IV)
+    # print("FNEG: ", FNEG)
+    KNEG1 = np.int(IW / 2 + 1)
+    KNEG2 = np.int(IW / 2 + IV)
     N = 0
-    #loop over all requested channels
+    # loop over all requested channels
     for channel in np.arange(IFIRST, ILAST, 1):
-        #central positive part
+        # central positive part
         YPOS = 0
         YNEG = 0
-        for xPOS  in np.arange(-KPOS, KPOS +1, 1):
-            IK = np.min([np.max([channel+xPOS, 1]), NCHAN])
+        for xPOS in np.arange(-KPOS, KPOS + 1, 1):
+            IK = np.min([np.max([channel + xPOS, 1]), NCHAN])
             YPOS = YPOS + IN[IK]
         # left and right negagive part
-        for xNEG in np.arange(KNEG1, KNEG2+1, 1):
-            IK = np.min([np.max([channel-xNEG, 1]), NCHAN])
+        for xNEG in np.arange(KNEG1, KNEG2 + 1, 1):
+            IK = np.min([np.max([channel - xNEG, 1]), NCHAN])
             YNEG = YNEG + IN[IK]
-            IK = np.min([np.max([channel+xNEG, 1]), NCHAN])
+            IK = np.min([np.max([channel + xNEG, 1]), NCHAN])
             YNEG = YNEG + IN[IK]
-        #calc filtered spectra
+        # calc filtered spectra
         if MODE == 0:
-            OUT[channel] = FPOS*YPOS + FNEG*YNEG
-        #calc variance of the spectra
+            OUT[channel] = FPOS * YPOS + FNEG * YNEG
+        # calc variance of the spectra
         else:
-            VAR = FPOS*FPOS*YPOS + FNEG*FNEG*YNEG
-            OUT[channel] = 1/np.max([VAR, 1])
-        N = N +1
+            VAR = FPOS * FPOS * YPOS + FNEG * FNEG * YNEG
+            OUT[channel] = 1 / np.max([VAR, 1])
+        N = N + 1
     return OUT
-
-
 
 
 # TOPHATFAST TOPHAT filtering protram (Mofiied by DW 20190403)
@@ -164,32 +163,29 @@ def TOPHAT(IN, NCHAN, IFIRST, ILAST, IWIDTH, MODE):
 def TOPHATFAST(IN, NCHAN, IWIDTH, MODE):
     if np.mod(IWIDTH, 2) == 0: IWIDTH = IWIDTH + 1
     ones = np.ones(NCHAN)
-    KNEG = np.int(IWIDTH/2 -0.5)
-    #print('KNEG: ', KNEG)
-    KPOS = np.int(IWIDTH -1)
-    #print('KPOS: ', KPOS)
-    hatpos = np.zeros(KPOS) +1/KPOS
-    hatneg = np.zeros(KNEG) -1/(2*KNEG)
+    KNEG = np.int(IWIDTH / 2 - 0.5)
+    # print('KNEG: ', KNEG)
+    KPOS = np.int(IWIDTH - 1)
+    # print('KPOS: ', KPOS)
+    hatpos = np.zeros(KPOS) + 1 / KPOS
+    hatneg = np.zeros(KNEG) - 1 / (2 * KNEG)
     tophat = np.hstack((hatneg, hatpos, hatneg))
-    #print('tophat: ',tophat)
-    hatpos_var = np.zeros(KPOS) +(1/KPOS)**2
-    hatneg_var = np.zeros(KNEG) + (-1/(2*KNEG))**2
+    # print('tophat: ',tophat)
+    hatpos_var = np.zeros(KPOS) + (1 / KPOS) ** 2
+    hatneg_var = np.zeros(KNEG) + (-1 / (2 * KNEG)) ** 2
     tophat_var = np.hstack((hatneg_var, hatpos_var, hatneg_var))
-    #print('tophat_var: ',tophat_var)
-    #print('tophat: ', np.sum(tophat))
-    #print(tophat)
+    # print('tophat_var: ',tophat_var)
+    # print('tophat: ', np.sum(tophat))
+    # print(tophat)
     # call to scipy.signal for S.G. filter
     IN = signal.savgol_filter(IN, IWIDTH, 2)
     if MODE == 0:
-        OUT = signal.convolve(IN, tophat, mode='same', method = 'direct')
-    #calc variance of the spectra
+        OUT = signal.convolve(IN, tophat, mode='same', method='direct')
+    # calc variance of the spectra
     else:
-        OUT = signal.convolve(IN, tophat_var, mode='same', method = 'direct')
-        OUT = 1/np.maximum(OUT, ones)
+        OUT = signal.convolve(IN, tophat_var, mode='same', method='direct')
+        OUT = 1 / np.maximum(OUT, ones)
     return OUT
-
-
-
 
 
 # Peak stripping - SNIP algorithm (Modified by DW 20190403)
@@ -209,42 +205,40 @@ def TOPHATFAST(IN, NCHAN, IWIDTH, MODE):
 # comment:  uses subroutine SGSMITH
 
 
-def SNIPFAST (Y, NCHAN, FWHM, NREDUC, NITER):
+def SNIPFAST(Y, NCHAN, FWHM, NREDUC, NITER):
     REDFAC = 1
-    if np.mod(FWHM,2) == 0: FWHM = FWHM + 1
-    #Smooth spectrum using scipy.signal function of S.G.
+    if np.mod(FWHM, 2) == 0: FWHM = FWHM + 1
+    # Smooth spectrum using scipy.signal function of S.G.
     YBACK = Y
-    #YBACK = signal.savgol_filter(Y, FWHM, 2 )
-    #initialize two NCHAN arrays for calulation of sums
+    # YBACK = signal.savgol_filter(Y, FWHM, 2 )
+    # initialize two NCHAN arrays for calulation of sums
     zeros = np.zeros(NCHAN)
     YBACK_sum = np.zeros(NCHAN)
 
     # we are using a non linear square/square root scaling circa Van espen    
     YBACK = np.sqrt(np.maximum(YBACK, zeros))
-    #alternative scaling not used
-    #YBACK = np.log(np.log(np.sqrt(np.maximum(YBACK,zeros) +1) +1) +1) 
+    # alternative scaling not used
+    # YBACK = np.log(np.log(np.sqrt(np.maximum(YBACK,zeros) +1) +1) +1)
     # for loop for number of times we wish to strip background
     for n in np.arange(0, NITER):
-        #after a suffiicient number of loops, reduce 'FWHM' by sqrt(2) until = 1
-        if n+1 > NITER-NREDUC:
-            REDFAC = REDFAC/np.sqrt(2)
-        #Allow for a reduction in 'FWHM' over loops with a minimum IW of 1
-        IW = np.max([np.int(REDFAC*FWHM),1])
-        #make a function [1,0,0,0,...1] width 2W+1 for convolve
-        straddle = np.zeros(2*IW+1)
-        straddle[0]=1
-        straddle[-1]=1
+        # after a suffiicient number of loops, reduce 'FWHM' by sqrt(2) until = 1
+        if n + 1 > NITER - NREDUC:
+            REDFAC = REDFAC / np.sqrt(2)
+        # Allow for a reduction in 'FWHM' over loops with a minimum IW of 1
+        IW = np.max([np.int(REDFAC * FWHM), 1])
+        # make a function [1,0,0,0,...1] width 2W+1 for convolve
+        straddle = np.zeros(2 * IW + 1)
+        straddle[0] = 1
+        straddle[-1] = 1
         # use scipy.signal.convolve to determine +/- average for test
-        YBACK_sum = 0.5*signal.convolve(YBACK, straddle, mode='same')
-        YBACK = np.minimum(YBACK, YBACK_sum) 
-    # we are using a non linear square/square root scaling circa Van espen
+        YBACK_sum = 0.5 * signal.convolve(YBACK, straddle, mode='same')
+        YBACK = np.minimum(YBACK, YBACK_sum)
+        # we are using a non linear square/square root scaling circa Van espen
     YBACK = np.square(YBACK)
-    
-    #alternative scaling not used
-    #YBACK = np.square(np.exp(np.exp(YBACK)-1)-1)-1
+
+    # alternative scaling not used
+    # YBACK = np.square(np.exp(np.exp(YBACK)-1)-1)-1
     return YBACK
-
-
 
 
 def pulse_pileup_removal(fittingdata):
@@ -263,70 +257,68 @@ def pulse_pileup_removal(fittingdata):
     
     """
     pos_channels = \
-    fittingdata.channels[np.nonzero(fittingdata.energy_scale>0)[0][0]:-1]
-    pos_channels_per_s = pos_channels/(fittingdata.life_time_in_ms/1000)
-    pileup_sum = np.zeros(len(pos_channels))   
-    for i in np.arange(100,len(pos_channels)):
+        fittingdata.channels[np.nonzero(fittingdata.energy_scale > 0)[0][0]:-1]
+    pos_channels_per_s = pos_channels / (fittingdata.life_time_in_ms / 1000)
+    pileup_sum = np.zeros(len(pos_channels))
+    for i in np.arange(100, len(pos_channels)):
         forward = pos_channels_per_s[0:i]
         reverse = np.flip(forward, axis=0)
-        shape_factor = (0.006/fittingdata.shaping_time)
-        pileup = shape_factor*(forward)*(reverse)
+        shape_factor = (0.006 / fittingdata.shaping_time)
+        pileup = shape_factor * (forward) * (reverse)
         pileup_sum[i] = sum(pileup)
-    fittingdata.channels[np.nonzero(fittingdata.energy_scale>0)[0][0]:-1] = \
-    (pos_channels_per_s - pileup_sum) * (fittingdata.life_time_in_ms/1000)
-    return 
-    
-       
+    fittingdata.channels[np.nonzero(fittingdata.energy_scale > 0)[0][0]:-1] = \
+        (pos_channels_per_s - pileup_sum) * (fittingdata.life_time_in_ms / 1000)
+    return
+
+
 def SCALEDSNIP(fittingdata):
     pos_energy_scale = \
-    fittingdata.energy_scale[np.nonzero(fittingdata.energy_scale>0)[0][0]:-1]
+        fittingdata.energy_scale[np.nonzero(fittingdata.energy_scale > 0)[0][0]:-1]
     pos_channels = \
-    fittingdata.channels[np.nonzero(fittingdata.energy_scale>0)[0][0]:-1]
+        fittingdata.channels[np.nonzero(fittingdata.energy_scale > 0)[0][0]:-1]
     spectrum_function = \
-    sp.interpolate.interp1d(np.sqrt(pos_energy_scale),
-                            pos_channels, kind = 'linear',
-                            fill_value = (0,0), bounds_error = False )
-    energy_scale_sqrt = np.arange(0,np.sqrt(max(pos_energy_scale)),
+        sp.interpolate.interp1d(np.sqrt(pos_energy_scale),
+                                pos_channels, kind='linear',
+                                fill_value=(0, 0), bounds_error=False)
+    energy_scale_sqrt = np.arange(0, np.sqrt(max(pos_energy_scale)),
                                   np.sqrt(max(pos_energy_scale))
-                                  /len(pos_channels))
+                                  / len(pos_channels))
     channels_sqrt = spectrum_function(energy_scale_sqrt)
     data_bg = SNIPFAST(channels_sqrt, len(channels_sqrt), 13, 10, 1000)
-    #data_bg = SNIPBG(channels_sqrt, len(channels_sqrt), 0, len(channels_sqrt)-1, 13, 10, 1000)
+    # data_bg = SNIPBG(channels_sqrt, len(channels_sqrt), 0, len(channels_sqrt)-1, 13, 10, 1000)
     new_data_corr = channels_sqrt - data_bg
     spectrum_function_squared = \
-    sp.interpolate.interp1d(np.square(energy_scale_sqrt), 
-                            new_data_corr, kind = 'linear', 
-                            fill_value = (0,0), bounds_error = False )
+        sp.interpolate.interp1d(np.square(energy_scale_sqrt),
+                                new_data_corr, kind='linear',
+                                fill_value=(0, 0), bounds_error=False)
     channels_corr = spectrum_function_squared(pos_energy_scale)
     channels_corr = channels_corr.clip(min=0)
-    fittingdata.channels[np.nonzero(fittingdata.energy_scale>0)[0][0]:-1] = \
-    channels_corr
+    fittingdata.channels[np.nonzero(fittingdata.energy_scale > 0)[0][0]:-1] = \
+        channels_corr
     return
 
 
 def polycap_remove(fittingdata):
-    number_of_points = 40 #changed from 40 on 20190725 dw
-    scaling = int(4000/number_of_points)
+    number_of_points = 40  # changed from 40 on 20190725 dw
+    scaling = int(4000 / number_of_points)
     bg_energy_scale = np.zeros(number_of_points)
     bg_channels = np.zeros(number_of_points)
     for i in np.arange(bg_energy_scale.shape[0]):
-        bg_energy_scale[i] = fittingdata.energy_scale[i*scaling + 100]
-        bg_channels[i] = np.min(fittingdata.channels[i*scaling + 50:(i+1)*scaling+50])
+        bg_energy_scale[i] = fittingdata.energy_scale[i * scaling + 100]
+        bg_channels[i] = np.min(fittingdata.channels[i * scaling + 50:(i + 1) * scaling + 50])
     bg_function = \
-    sp.interpolate.interp1d(bg_energy_scale, bg_channels, kind = 'cubic',
-                            fill_value = (0,0), bounds_error = False)
+        sp.interpolate.interp1d(bg_energy_scale, bg_channels, kind='cubic',
+                                fill_value=(0, 0), bounds_error=False)
     bg_intensity = bg_function(fittingdata.energy_scale)
     bg_intensity = bg_intensity.clip(min=0)
     bg_corrected = fittingdata.channels - bg_intensity
     fittingdata.channels = bg_corrected.clip(min=0)
     return
-        
-
 
 
 def spectra_fit(directory_path, fitter, method, elements):
     files = []
-    spx_files =[]
+    spx_files = []
     roi_data = elements
     model_data = elements
     print(elements)
@@ -336,7 +328,7 @@ def spectra_fit(directory_path, fitter, method, elements):
         break
     for file in files:
         if '.spx' in file:
-            spx_files.append(file) 
+            spx_files.append(file)
     for file in spx_files:
         print(file)
         spx_file = file
@@ -354,43 +346,43 @@ def spectra_fit(directory_path, fitter, method, elements):
         hsEDS.add_elements(elements)
         hsEDS.add_lines()
         line_names = hsEDS.metadata.Sample.xray_lines
-        #print(line_names)
+        # print(line_names)
         mod = hsEDS.create_model()
         mod.remove('background_order_6')
         new_roi = np.zeros(len(elements))
         new_model = np.zeros(len(elements))
-        mod.fit(fitter= fitter, method= method)
+        mod.fit(fitter=fitter, method=method)
         for i in np.arange(len(elements)):
             new_roi[i] = np.float(hsEDS.get_lines_intensity([line_names[i]])[0].data[0])
-            model_call = ''.join(['mod.components.',line_names[i],'.A.value'])
+            model_call = ''.join(['mod.components.', line_names[i], '.A.value'])
             new_model[i] = eval(model_call)
-            #test_param[i] = ''.join(['mod.components.', line_names[i], '.A.value'])
-            #new_model[i]= np.float(test_param)
-        #Hf_La_model.append(np.float())
-        #Si_Ka_model.append(np.float(mod.components.Si_Ka.A.value))
-        #Hf_Si_ratio.append(np.float(mod.components.Hf_La.A.value)/np.float(mod.components.Si_Ka.A.value))
+            # test_param[i] = ''.join(['mod.components.', line_names[i], '.A.value'])
+            # new_model[i]= np.float(test_param)
+        # Hf_La_model.append(np.float())
+        # Si_Ka_model.append(np.float(mod.components.Si_Ka.A.value))
+        # Hf_Si_ratio.append(np.float(mod.components.Hf_La.A.value)/np.float(mod.components.Si_Ka.A.value))
         life_time_in_ms.append(spx.life_time_in_ms)
-        roi_data = np.vstack((roi_data,new_roi))
-        model_data = np.vstack((model_data,new_model))
-    roi_data = roi_data[1:,:]
-    model_data = model_data[1:,:]    
-    #spx_files = np.array(spx_files)
-    #print(spx_files)
-    #spx_files = spx_files[np.newaxis]    
-    #spx_files = spx_files.transpose
-    #spx_files.shape
-    #element_data.shape
-    #columns_df = ['filename'].append(line_names)
-    #data_df = np.hstack((spx_files, element_data))   
-    roi_df = pd.DataFrame(data=roi_data, columns = line_names)
-    roi_df.insert(0,'filename', spx_files)
+        roi_data = np.vstack((roi_data, new_roi))
+        model_data = np.vstack((model_data, new_model))
+    roi_data = roi_data[1:, :]
+    model_data = model_data[1:, :]
+    # spx_files = np.array(spx_files)
+    # print(spx_files)
+    # spx_files = spx_files[np.newaxis]
+    # spx_files = spx_files.transpose
+    # spx_files.shape
+    # element_data.shape
+    # columns_df = ['filename'].append(line_names)
+    # data_df = np.hstack((spx_files, element_data))
+    roi_df = pd.DataFrame(data=roi_data, columns=line_names)
+    roi_df.insert(0, 'filename', spx_files)
     roi_df['life time in ms'] = life_time_in_ms
-    model_df = pd.DataFrame(data=model_data, columns = line_names)
-    model_df.insert(0,'filename', spx_files)
+    model_df = pd.DataFrame(data=model_data, columns=line_names)
+    model_df.insert(0, 'filename', spx_files)
     model_df['life time in ms'] = life_time_in_ms
     return roi_df, model_df
 
-#def model_lookup(mod, line_name):
+# def model_lookup(mod, line_name):
 #    model_call = {'N_Ka': mod.components.N_Ka.A.value,
 #                  'O_Ka': mod.components.O_Ka.A.value,
 #                  'F_Ka': mod.components.F_Ka.A.value,
@@ -459,11 +451,8 @@ def spectra_fit(directory_path, fitter, method, elements):
 #    return call
 
 
-
-
-
-#Work in progress - it performs a tophat on the fly, and is very
-#confusing to read through 20190401 daw    
+# Work in progress - it performs a tophat on the fly, and is very
+# confusing to read through 20190401 daw
 ## Peak Search - LOCPEAKS uses tophyhat filter
 ##
 ## Input:  Y           Spectrum
@@ -474,7 +463,7 @@ def spectra_fit(directory_path, fitter, method, elements):
 ## OUtput: NPEAK       Number of peaks found
 ##         IPOS        Array of peak positions
 #
-#def LOCPEAKS (Y, NCHAN, IWID, R, MAXP):
+# def LOCPEAKS (Y, NCHAN, IWID, R, MAXP):
 #    # Width of filter (number of channels in the tophat)
 #    # must be odd and at least 3
 #    NP = np.int(np.max([(IWID/2)*2 + 1, 3]))

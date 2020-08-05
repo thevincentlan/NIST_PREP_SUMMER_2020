@@ -1,21 +1,24 @@
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import numpy as np
-import new_io
+import bruker_io
+import os
 
 
 def element_b(element, start=0, end=None):
-    dataset = new_io.FittingData(r'Trials\Element B ' + element + '.spx')
+    species = os.path.join("Trials", "Element B " + element + ".spx")
+    dataset = bruker_io.FittingData(species)
     gauss_fit(dataset, element, start, end)
 
 
 def glass(sequence, start=0, end=None):
-    dataset = new_io.FittingData(r'Glass\glass_chip_200s_12x12_quant\glass_chip_200s_12x12det_' + sequence + '.spx')
+    species = os.path.join("Glass", 'glass_chip_200s_12x12det_' + sequence + '.spx')
+    dataset = bruker_io.FittingData(species)
     gauss_fit(dataset, sequence, start, end)
 
 
 def gauss_fit(dataset, name, start, end):
-    new_io.bruker_spx_import(dataset)
+    bruker_io.bruker_spx_import(dataset)
 
     x = dataset.energy_scale[start:end]
     y = dataset.channels[start:end]
