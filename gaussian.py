@@ -33,8 +33,8 @@ def gauss_fit(dataset, name, start, end):
     popt, pcov = curve_fit(Gauss, x, y, p0=[max(y), mean, sigma])
 
     plt.figure(num=None, figsize=(7, 3), dpi=80, facecolor='w', edgecolor='k')
-    plt.plot(x, y, label='data')
-    plt.plot(x, Gauss(x, *popt), label='fit')
+    plt.plot(x, y, 'o', label='data')
+    plt.plot(x, Gauss(x, *popt), '+', label='fit')
     plt.legend()
     plt.title(name + ' XRF')
     plt.xlabel('Energy (keV)')
